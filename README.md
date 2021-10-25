@@ -334,10 +334,125 @@ resource "aws_key_pair" "key" {
   }
 }
 ```
-
 # 11. Creating a Classic Load Balancer
 > A load balancer serves as the single point of contact for clients. The load balancer distributes incoming application traffic across multiple targets, such as EC2 instances, in multiple Availability Zones.
 
 The following diagram illustrates the basic components. 
 
 ![alt text](https://i.ibb.co/bWXzc7S/1.png[/img)
+
+- Elastic Load Balancing/Classic Load Balancer can scale to the vast majority of workloads automatically.
+- A listener checks for connection requests from clients, using the protocol and port that you configure, and forwards requests to one or more registered instances using the protocol and port number that you configure. You add one or more listeners to your load balancer.
+
+##### Creating the Classic Load Balancer
+```sh
+resource "aws_elb" "classic" {
+  name    = "classic-lc"
+  subnets = [aws_subnet.public1.id, aws_subnet.public2.id]
+
+listener {
+    instance_port     = 80
+    instance_protocol = "http"
+    lb_port= 80
+    lb_protocol= "http"
+  }
+
+security_groups = [aws_security_group.all-traffic.id]
+
+health_check {
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout= 3
+    target= "TCP:80"
+    interval= 30
+  }
+
+  tags = {
+    Name = "${var.project}-classic-LB"
+  }
+
+lifecycle {
+    create_before_destroy = true
+  }
+}
+
+output "dns_name" {    
+  value = aws_elb.classic.dns_name
+}
+```
+# 12. Creating Launch Configuration
+> Need to create a user data for the lauch configuration first
+```sh
+vim setup.sh
+```
+```sh
+#!/bin/bash
+
+echo "ClientAliveInterval 60" >> /etc/ssh/sshd_config
+echo "LANG=en_US.utf-8" >> /etc/environment
+echo "LC_ALL=en_US.utf-8" >> /etc/environment
+service sshd restart
+
+echo "password123" | passwd root --stdin
+sed  -i 's/#PermitRootLogin yes/PermitRootLogin yes/' /etc/ssh/sshd_config
+sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+service sshd restart
+
+yum install httpd php -y
+systemctl enable httpd
+systemctl restart httpd
+
+cat <<EOF > /var/www/html/index.php
+<?php
+\$output = shell_exec('echo $HOSTNAME');
+echo "<h1><center><pre>\$output</pre></center></h1>";
+echo "<h1><center><pre>  Version 1 </pre></center></h1>";
+?>
+EOF
+```
+##### Launch Configuration
+```sh
+vim lc.tf
+```
+```
+resource "aws_launch_configuration" "test-lc" {
+  
+  name              = "test-lc"
+  image_id          = var.ami
+  instance_type     = var.type
+  key_name          = aws_key_pair.key.id
+  security_groups   = [aws_security_group.all-traffic.id]
+  user_data         = file("11-setup.sh")
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+```
+
+# 13. Creating Auto Scale Group
+```sh
+vim asg.tf
+```
+```sh
+resource "aws_autoscaling_group" "asg" {
+
+  launch_configuration    =  aws_launch_configuration.test-lc.id
+  vpc_zone_identifier     = [aws_subnet.public1.id, aws_subnet.public2.id]
+  health_check_type       = "EC2"
+  min_size                = var.asg_count
+  max_size                = var.asg_count
+  desired_capacity        = var.asg_count
+  wait_for_elb_capacity   = var.asg_count
+  load_balancers          = [aws_elb.classic.id]
+  tag {
+    key = "Name"
+    propagate_at_launch = true
+    value = "test-asg"
+  }
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+```
+# Conclusion
+Here is a simple document on how to use Terraform to build an AWS Classic Load Balancer
