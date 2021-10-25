@@ -334,3 +334,10 @@ resource "aws_key_pair" "key" {
   }
 }
 ```
+
+# 11. Creating a Classic Load Balancer
+> A load balancer serves as the single point of contact for clients. The load balancer distributes incoming application traffic across multiple targets, such as EC2 instances, in multiple Availability Zones.
+
+The following diagram illustrates the basic components. 
+
+![alt text](https://i.ibb.co/bWXzc7S/1.png[/img)
