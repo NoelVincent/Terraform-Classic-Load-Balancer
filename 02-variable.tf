@@ -3,11 +3,11 @@ variable "project" {
 }
 
 variable "access_key"{
-  default = "AKIATHTPDU375Y22ECMN"
+  default = " "           #==========> provide the access_key of the IAM user
 }
 
 variable "secret_key"{
-  default = "QG1m1TBG1IIyfcDjvBjsnuIQ1SHDOewKmsMRue6k"
+  default = " "          #==========> provide the secret_key of the IAM user
 }
 
 variable "vpc_cidr" {
